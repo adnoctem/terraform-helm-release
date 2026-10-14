@@ -1,71 +1,48 @@
 resource "helm_release" "current" {
-  for_each = var.create ? var.releases : []
+  count = var.create ? 1 : 0
 
-  name             = lookup(each.value, "name", each.key)
-  description      = lookup(each.value, "description", null)
-  namespace        = lookup(each.value, "namespace", null)
-  create_namespace = lookup(each.value, "create_namespace", null)
-  chart            = lookup(each.value, "chart", null)
-  version          = lookup(each.value, "version", null)
-  repository       = lookup(each.value, "repository", null)
-  values           = lookup(each.value, "values", [])
-
-  timeout                    = lookup(each.value, "timeout", null)
-  repository_key_file        = lookup(each.value, "repository_key_file", null)
-  repository_cert_file       = lookup(each.value, "repository_cert_file", null)
-  repository_ca_file         = lookup(each.value, "repository_ca_file", null)
-  repository_username        = lookup(each.value, "repository_username", null)
-  repository_password        = lookup(each.value, "repository_password", null)
-  devel                      = lookup(each.value, "devel", null)
-  verify                     = lookup(each.value, "verify", null)
-  keyring                    = lookup(each.value, "keyring", null)
-  disable_webhooks           = lookup(each.value, "disable_webhooks", null)
-  reuse_values               = lookup(each.value, "reuse_values", null)
-  reset_values               = lookup(each.value, "reset_values", null)
-  force_update               = lookup(each.value, "force_update", null)
-  recreate_pods              = lookup(each.value, "recreate_pods", null)
-  cleanup_on_fail            = lookup(each.value, "cleanup_on_fail", null)
-  max_history                = lookup(each.value, "max_history", null)
-  atomic                     = lookup(each.value, "atomic", null)
-  skip_crds                  = lookup(each.value, "skip_crds", null)
-  render_subchart_notes      = lookup(each.value, "render_subchart_notes", null)
-  disable_openapi_validation = lookup(each.value, "disable_openapi_validation", null)
-  wait                       = lookup(each.value, "wait", false)
-  wait_for_jobs              = lookup(each.value, "wait_for_jobs", null)
-  dependency_update          = lookup(each.value, "dependency_update", null)
-  replace                    = lookup(each.value, "replace", null)
-  lint                       = lookup(each.value, "lint", null)
-
-  dynamic "postrender" {
-    for_each = lookup(each.value, "postrender", [])
-
-    content {
-      binary_path = postrender.value.binary_path
-      args        = try(postrender.value.args, null)
-    }
-  }
-
-  dynamic "set" {
-    for_each = lookup(each.value, "set", [])
-
-    content {
-      name  = set.value.name
-      value = set.value.value
-      type  = try(set.value.type, null)
-    }
-  }
-
-  dynamic "set_sensitive" {
-    for_each = lookup(each.value, "set_sensitive", [])
-
-    content {
-      name  = set_sensitive.value.name
-      value = set_sensitive.value.value
-      type  = try(set_sensitive.value.type, null)
-    }
-  }
-
-  depends_on = [
-    var.depends
-  ]
+  atomic                     = var.atomic
+  chart                      = var.chart
+  cleanup_on_fail            = var.cleanup_on_fail
+  create_namespace           = var.create_namespace
+  dependency_update          = var.dependency_update
+  description                = var.description
+  devel                      = var.devel
+  disable_crd_hooks          = var.disable_crd_hooks
+  disable_openapi_validation = var.disable_openapi_validation
+  disable_webhooks           = var.disable_webhooks
+  force_update               = var.force_update
+  keyring                    = var.keyring
+  lint                       = var.lint
+  max_history                = var.max_history
+  name                       = var.name
+  namespace                  = var.namespace
+  pass_credentials           = var.pass_credentials
+  postrender                 = var.postrender
+  recreate_pods              = var.recreate_pods
+  render_subchart_notes      = var.render_subchart_notes
+  replace                    = var.replace
+  repository                 = var.repository
+  repository_ca_file         = var.repository_ca_file
+  repository_cert_file       = var.repository_cert_file
+  repository_key_file        = var.repository_key_file
+  repository_password        = var.repository_password
+  repository_username        = var.repository_username
+  reset_values               = var.reset_values
+  reuse_values               = var.reuse_values
+  set                        = var.set
+  set_list                   = var.set_list
+  set_sensitive              = var.set_sensitive
+  set_wo                     = var.set_wo
+  set_wo_revision            = var.set_wo_revision
+  skip_crds                  = var.skip_crds
+  take_ownership             = var.take_ownership
+  timeout                    = var.timeout
+  timeouts                   = var.timeouts
+  upgrade_install            = var.upgrade_install
+  values                     = var.values
+  verify                     = var.verify
+  version                    = var.chart_version
+  wait                       = var.wait
+  wait_for_jobs              = var.wait_for_jobs
 }

@@ -30,7 +30,12 @@
         }
       }
     ],
-    "@semantic-release/github",
+    [
+      "@semantic-release/github",
+      {
+        "successComment": false
+      }
+    ],
     [
       "@semantic-release/changelog",
       {
