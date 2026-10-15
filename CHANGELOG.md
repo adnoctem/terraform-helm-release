@@ -1,3 +1,16 @@
+## [2.0.0](https://github.com/adnoctem/terraform-helm-release/compare/v1.0.0...v2.0.0) (2026-10-15)
+
+### ⚠ BREAKING CHANGES
+
+* **module:** replace the releases map with one release per module call.
+Require Terraform/OpenTofu 1.11 and Helm provider 3.3. Move provider settings
+to the caller and follow docs/UPGRADING.md before migrating existing state.
+
+### Features
+
+* **module:** add structured values and account mapping helpers ([0705621](https://github.com/adnoctem/terraform-helm-release/commit/0705621313de3bccfd0da204064cbd41f768053a))
+* **module:** manage individual Helm releases ([4401a8e](https://github.com/adnoctem/terraform-helm-release/commit/4401a8eb3dfd3a5c67ec37fc4ae92072e1f53eb7))
+
 ## 1.0.0 (2025-11-14)
 
 ### Features
