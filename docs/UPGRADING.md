@@ -59,3 +59,14 @@ ordinary configurable outputs. Document any analysis limitations rather than han
 The current Formr report incorrectly marks the resource's `version` field as omitted despite the
 explicit `version = var.chart_version` mapping. The native option test verifies this mapping.
 This is an analysis limitation; retain the generated report unchanged until Formr is corrected.
+
+## Release conveniences
+
+`name` and `chart` can now be omitted only when `create=false`. Existing enabled calls and raw YAML
+inputs keep their behavior. Collection nulls normalize to empty values. New checks reject invalid
+release names, numeric options, duplicate exact `set*` paths, and unsupported override types.
+Write-only values now require a positive `set_wo_revision`; otherwise the provider may not consume them.
+
+`default_values`, `values_object`, and mapped `service_accounts` are additive inputs. Review the README
+precedence contract before moving settings between these layers. Account annotations and labels are
+ordinary chart values, not a secret transport or proof that cloud trust has been configured.

@@ -40,7 +40,7 @@ resource "helm_release" "current" {
   timeout                    = var.timeout
   timeouts                   = var.timeouts
   upgrade_install            = var.upgrade_install
-  values                     = var.values
+  values                     = local.values
   verify                     = var.verify
   version                    = var.chart_version
   wait                       = var.wait

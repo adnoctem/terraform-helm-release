@@ -49,16 +49,34 @@ provider "helm" {
 Provider authentication, registry credentials, and aliases belong to the caller. There are no
 embedded provider configurations or cluster-token inputs. Use a module `for_each` for independent
 releases, or separate module calls with `depends_on` when releases have installation dependencies.
-`create = false` removes an existing managed release and returns null outputs.
+`create = false` removes an existing managed release and returns null outputs. A disabled call may
+omit `name` and `chart`; enabled calls require a valid Helm release name and a nonempty chart.
 
 All configurable fields in the Helm 3.3 resource schema are exposed. `chart_version` maps to the
 provider's `version` because `version` is reserved in module calls. Optional null settings use provider
 defaults. `timeout` controls Helm operations in seconds; `timeouts` controls Terraform provider operations.
 See [basic](examples/basic) and [full](examples/full) for concrete configurations.
 
-`values` is an ordered list of YAML strings. Use `yamlencode`, `file`, or `templatefile`; later YAML
-values override earlier values according to Helm rules. `set`, `set_list`, and `set_sensitive` remain
-available. Keep keys unique across these override collections to avoid ambiguous precedence.
+Values are composed in a documented order, from lowest to highest priority:
+
+1. The chart's own defaults.
+2. `default_values`: optional YAML defaults supplied by a catalog or another caller.
+3. Generated `service_accounts` settings, using explicit chart paths.
+4. `values_object`: a native HCL object/map, encoded without flattening nested types.
+5. `values`: caller YAML documents, in their supplied order.
+6. Helm `set`, `set_list`, `set_sensitive`, and write-only overrides.
+
+Helm performs nested merging. The module does not use Terraform's shallow `merge()` on chart values.
+Use `file` or `templatefile` for YAML; paths are resolved in the calling configuration. `values_object`
+accepts arbitrary nested types but requires an object/map at the top level. Exact override paths must
+be unique across the `set*` collections; override the same key in a later YAML layer when layering is
+intentional. Parent/child path conflicts and equivalent Helm-escaped spellings are not canonicalized.
+
+Explicit null values for ordinary collection inputs become empty collections. Null scalar options
+retain provider defaults. Invalid timeouts, history counts, release names, override types, and write-only
+revisions fail with module diagnostics. `literal` is supported for `set`/`set_sensitive`; write-only
+entries accept `auto` or `string`, matching the provider.
+
 Sensitive marking hides values in normal CLI output but does not remove them from Terraform state.
 Metadata, rendered manifests, and resource details are exported as sensitive because charts may
 include secrets there.
@@ -67,6 +85,40 @@ include secrets there.
 Increment `set_wo_revision` when it changes. Its values are not retained as Terraform input/state
 attributes, but Helm stores release information in Kubernetes and charts may create Secrets.
 Do not use ordinary values or sensitive overrides expecting the same write-only behavior.
+
+## Service accounts and workload identity
+
+The wrapper translates logical account roles into chart values. For a chart using a conventional
+service-account object, a caller can provide:
+
+```hcl
+service_accounts = {
+  controller = {
+    name        = "controller"
+    create      = false
+    annotations = { "example.com/identity" = "existing-identity" }
+  }
+}
+service_account_paths = {
+  controller = {
+    name        = ["serviceAccount", "name"]
+    create      = ["serviceAccount", "create"]
+    annotations = ["serviceAccount", "annotations"]
+  }
+}
+```
+
+Paths are lists of literal YAML keys. Dots, slashes, and commas in annotation keys require no Helm
+escaping. Supported settings are `name`, `create`, `annotations`, `labels`, and `pod_labels`; every
+populated setting needs a mapping. Missing mappings fail rather than silently dropping a setting.
+Multiple roles support charts with multiple accounts. Maps merge through Helm, and later caller values
+may override generated settings. Account mappings must not target the same path twice.
+
+`create=false` asks the chart to use an existing account where the chart supports that behavior; its
+annotations/labels must be managed by that account's owner. It does not mutate an existing ServiceAccount
+outside Helm. This module creates no separate Kubernetes or cloud resources. Cloud identity adapters
+can supply annotations, pod labels, and account names, while IAM/federation/associations remain outside
+this module. Omit the role or conditionally pass `{}` to disable this convenience.
 
 ## Compatibility and maintenance
 
@@ -96,11 +148,12 @@ No modules.
 | Name | Description | Type | Default | Required |
 | ---- | ----------- | ---- | ------- | :------: |
 | <a name="input_atomic"></a> [atomic](#input\_atomic) | If set, installation process purges chart on fail. The wait flag will be set automatically if atomic is used | `bool` | `null` | no |
-| <a name="input_chart"></a> [chart](#input\_chart) | Chart name to be installed. A path may be used | `string` | n/a | yes |
+| <a name="input_chart"></a> [chart](#input\_chart) | Chart name, URL, or local path. Required only when create is true. | `string` | `null` | no |
 | <a name="input_chart_version"></a> [chart\_version](#input\_chart\_version) | Specify the exact chart version to install. If this is not specified, the latest version is installed | `string` | `null` | no |
 | <a name="input_cleanup_on_fail"></a> [cleanup\_on\_fail](#input\_cleanup\_on\_fail) | Allow deletion of new resources created in this upgrade when upgrade fails | `bool` | `null` | no |
 | <a name="input_create"></a> [create](#input\_create) | Whether to manage this Helm release. False removes an existing managed release. | `bool` | `true` | no |
 | <a name="input_create_namespace"></a> [create\_namespace](#input\_create\_namespace) | Create the namespace if it does not exist | `bool` | `null` | no |
+| <a name="input_default_values"></a> [default\_values](#input\_default\_values) | Low-priority YAML defaults for composition by catalogs. Service-account settings, values\_object, values, and set overrides take precedence, in that order. | `list(string)` | `[]` | no |
 | <a name="input_dependency_update"></a> [dependency\_update](#input\_dependency\_update) | Run helm dependency update before installing the chart | `bool` | `null` | no |
 | <a name="input_description"></a> [description](#input\_description) | Add a custom description | `string` | `null` | no |
 | <a name="input_devel"></a> [devel](#input\_devel) | Use chart development versions, too. Equivalent to version '>0.0.0-0'. If 'version' is set, this is ignored | `bool` | `null` | no |
@@ -111,7 +164,7 @@ No modules.
 | <a name="input_keyring"></a> [keyring](#input\_keyring) | Location of public keys used for verification, Used only if 'verify is true' | `string` | `null` | no |
 | <a name="input_lint"></a> [lint](#input\_lint) | Run helm lint when planning | `bool` | `null` | no |
 | <a name="input_max_history"></a> [max\_history](#input\_max\_history) | Limit the maximum number of revisions saved per release. Use 0 for no limit | `number` | `null` | no |
-| <a name="input_name"></a> [name](#input\_name) | Release name. The length must not be longer than 53 characters | `string` | n/a | yes |
+| <a name="input_name"></a> [name](#input\_name) | Release name, at most 53 characters. Required only when create is true. | `string` | `null` | no |
 | <a name="input_namespace"></a> [namespace](#input\_namespace) | Namespace to install the release into | `string` | `null` | no |
 | <a name="input_pass_credentials"></a> [pass\_credentials](#input\_pass\_credentials) | Pass credentials to all domains | `bool` | `null` | no |
 | <a name="input_postrender"></a> [postrender](#input\_postrender) | Postrender command config | ```object({ args = optional(list(string)) binary_path = string })``` | `null` | no |
@@ -126,8 +179,10 @@ No modules.
 | <a name="input_repository_username"></a> [repository\_username](#input\_repository\_username) | Username for HTTP basic authentication | `string` | `null` | no |
 | <a name="input_reset_values"></a> [reset\_values](#input\_reset\_values) | When upgrading, reset the values to the ones built into the chart | `bool` | `null` | no |
 | <a name="input_reuse_values"></a> [reuse\_values](#input\_reuse\_values) | When upgrading, reuse the last release's values and merge in any overrides. If 'reset\_values' is specified, this is ignored | `bool` | `null` | no |
+| <a name="input_service_account_paths"></a> [service\_account\_paths](#input\_service\_account\_paths) | Role -> field -> chart key segments. Supported fields: name, create, annotations, labels, pod\_labels. Segments are literal keys, so dots/slashes need no Helm escaping. Omit unsupported fields. | `map(map(list(string)))` | `{}` | no |
+| <a name="input_service_accounts"></a> [service\_accounts](#input\_service\_accounts) | Chart-side service-account and workload identity settings keyed by logical role. Each populated field needs an explicit service\_account\_paths mapping. Does not create cloud identities or separate Kubernetes resources. | ```map(object({ name = optional(string) create = optional(bool) annotations = optional(map(string), {}) labels = optional(map(string), {}) pod_labels = optional(map(string), {}) }))``` | `{}` | no |
 | <a name="input_set"></a> [set](#input\_set) | Custom values to be merged with the values | ```list(object({ name = string type = optional(string) value = optional(string) }))``` | `[]` | no |
-| <a name="input_set_list"></a> [set\_list](#input\_set\_list) | Custom sensitive values to be merged with the values | ```list(object({ name = string value = list(string) }))``` | `[]` | no |
+| <a name="input_set_list"></a> [set\_list](#input\_set\_list) | List-valued Helm overrides | ```list(object({ name = string value = list(string) }))``` | `[]` | no |
 | <a name="input_set_sensitive"></a> [set\_sensitive](#input\_set\_sensitive) | Custom sensitive values to be merged with the values | ```list(object({ name = string type = optional(string) value = string }))``` | `[]` | no |
 | <a name="input_set_wo"></a> [set\_wo](#input\_set\_wo) | Write-only Helm overrides. Increment set\_wo\_revision on changes. Ephemeral inputs are not retained in Terraform state; Helm still persists release data in Kubernetes. | ```list(object({ name = string type = optional(string) value = string }))``` | `null` | no |
 | <a name="input_set_wo_revision"></a> [set\_wo\_revision](#input\_set\_wo\_revision) | The current revision of the write-only "set\_wo" attribute. Incrementing this integer value will cause Terraform to update the write-only value. | `number` | `null` | no |
@@ -137,6 +192,7 @@ No modules.
 | <a name="input_timeouts"></a> [timeouts](#input\_timeouts) | Terraform provider operation timeouts, separate from the Helm timeout in seconds. | ```object({ create = optional(string) delete = optional(string) read = optional(string) update = optional(string) })``` | `null` | no |
 | <a name="input_upgrade_install"></a> [upgrade\_install](#input\_upgrade\_install) | If true, the provider will install the release at the specified version even if a release not controlled by the provider is present. This is equivalent to running 'helm upgrade --install'. WARNING: this may not be suitable for production use -- see the 'Upgrade Mode' note in the provider documentation. Defaults to `false`. | `bool` | `null` | no |
 | <a name="input_values"></a> [values](#input\_values) | List of values in raw YAML format to pass to helm | `list(string)` | `[]` | no |
+| <a name="input_values_object"></a> [values\_object](#input\_values\_object) | A native HCL object/map encoded as YAML before values. Nested types are preserved; Helm performs the merge. Ordinary values remain in state. | `any` | `null` | no |
 | <a name="input_verify"></a> [verify](#input\_verify) | Verify the package before installing it. | `bool` | `null` | no |
 | <a name="input_wait"></a> [wait](#input\_wait) | Will wait until all resources are in a ready state before marking the release as successful. | `bool` | `null` | no |
 | <a name="input_wait_for_jobs"></a> [wait\_for\_jobs](#input\_wait\_for\_jobs) | If wait is enabled, will wait until all Jobs have been completed before marking the release as successful. | `bool` | `null` | no |
